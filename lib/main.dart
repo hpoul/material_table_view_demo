@@ -483,19 +483,28 @@ class _DemoPageState extends State<DemoPage>
       columnIndex: columnIndex,
       tableViewChanged: null,
       onColumnTranslate: (index, newTranslation) {
-        final columns = columnsState.value.toList();
-        columns[index] = columns[index].copyWith(translation: newTranslation);
-        columnsState.value = columns;
+        columnsState.value[index] =
+            columnsState.value[index].copyWith(translation: newTranslation);
+        setState(() {});
+        // final columns = columnsState.value.toList();
+        // columns[index] = columns[index].copyWith(translation: newTranslation);
+        // columnsState.value = columns;
       },
       onColumnResize: (index, newWidth) {
-        final columns = columnsState.value.toList();
-        columns[index] = columns[index].copyWith(width: newWidth);
-        columnsState.value = columns;
+        columnsState.value[index] =
+            columnsState.value[index].copyWith(width: newWidth);
+        setState(() {});
+        // final columns = columnsState.value.toList();
+        // columns[index] = columns[index].copyWith(width: newWidth);
+        // columnsState.value = columns;
       },
       onColumnMove: (oldIndex, newIndex) {
-        final columns = columnsState.value.toList();
-        columns.insert(newIndex, columns.removeAt(oldIndex));
-        columnsState.value = columns;
+        columnsState.value
+            .insert(newIndex, columnsState.value.removeAt(oldIndex));
+        setState(() {});
+        // final columns = columnsState.value.toList();
+        // columns.insert(newIndex, columns.removeAt(oldIndex));
+        // columnsState.value = columns;
       },
       leadingImmovableColumnCount: 0,
       trailingImmovableColumnCount: 0,
