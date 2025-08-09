@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:material_table_view/default_animated_switcher_transition_builder.dart';
 import 'package:material_table_view/material_table_view.dart';
 import 'package:material_table_view/shimmer_placeholder_shade.dart';
@@ -93,7 +94,7 @@ class _DemoTableColumn extends TableColumn {
 
 const _columnsPowerOfTwo = 12;
 
-class DemoPage extends StatefulWidget {
+class DemoPage extends StatefulHookWidget {
   const DemoPage({super.key});
 
   @override
@@ -111,28 +112,6 @@ class _DemoPageState extends State<DemoPage>
   late Timer periodicPlaceholderOffsetIncreaseTimer;
 
   final verticalSliverExampleScrollController = ScrollController();
-
-  final columns = <_DemoTableColumn>[
-    _DemoTableColumn(
-      index: 0,
-      width: 56.0,
-      freezePriority: 1 * (_columnsPowerOfTwo + 1),
-      sticky: true,
-    ),
-    for (var i = 1; i <= 1 << _columnsPowerOfTwo; i++)
-      _DemoTableColumn(
-        index: i,
-        width: 64,
-        minResizeWidth: 64.0,
-        freezePriority: 1 *
-            (_columnsPowerOfTwo - (_getPowerOfTwo(i) ?? _columnsPowerOfTwo)),
-      ),
-    _DemoTableColumn(
-      index: -1,
-      width: 48.0,
-      freezePriority: 1 * (_columnsPowerOfTwo + 1),
-    ),
-  ];
 
   double get _rowHeight => 48.0 + 4 * Theme.of(context).visualDensity.vertical;
 
@@ -167,7 +146,27 @@ class _DemoPageState extends State<DemoPage>
   Widget build(BuildContext context) {
     const shimmerBaseColor = Color(0x20808080);
     const shimmerHighlightColor = Color(0x40FFFFFF);
-
+    final columnsState = useState(<_DemoTableColumn>[
+      _DemoTableColumn(
+        index: 0,
+        width: 56.0,
+        freezePriority: 1 * (_columnsPowerOfTwo + 1),
+        sticky: true,
+      ),
+      for (var i = 1; i <= 1 << _columnsPowerOfTwo; i++)
+        _DemoTableColumn(
+          index: i,
+          width: 64,
+          minResizeWidth: 64.0,
+          freezePriority: 1 *
+              (_columnsPowerOfTwo - (_getPowerOfTwo(i) ?? _columnsPowerOfTwo)),
+        ),
+      _DemoTableColumn(
+        index: -1,
+        width: 48.0,
+        freezePriority: 1 * (_columnsPowerOfTwo + 1),
+      ),
+    ]);
     return Directionality(
       textDirection: stylingController.useRTL.value
           ? TextDirection.rtl
@@ -237,12 +236,14 @@ class _DemoPageState extends State<DemoPage>
                     stylingController.doPlaceholders.value
                         ? placeholderShade
                         : null,
+                    columnsState,
                   ),
                   _buildSliverExample(
                     context,
                     stylingController.doPlaceholders.value
                         ? placeholderShade
                         : null,
+                    columnsState,
                   ),
                 ],
               ),
@@ -257,9 +258,10 @@ class _DemoPageState extends State<DemoPage>
   Widget _buildBoxExample(
     BuildContext context,
     TablePlaceholderShade? placeholderShade,
+    ValueNotifier<List<_DemoTableColumn>> columnsState,
   ) =>
       TableView.builder(
-        columns: columns,
+        columns: columnsState.value,
         style: TableViewStyle(
           dividers: TableViewDividersStyle(
             vertical: TableViewVerticalDividersStyle.symmetric(
@@ -285,8 +287,8 @@ class _DemoPageState extends State<DemoPage>
         rowCount: stylingController.doExpansion.value
             ? (1 << 12) - 1
             : ((1 << 31) - 1),
-        rowBuilder:
-            createRowBuilder(context, stylingController.doExpansion.value),
+        rowBuilder: createRowBuilder(
+            context, stylingController.doExpansion.value, 0, columnsState),
         rowReorder: TableRowReorder(
           onReorder: (oldIndex, newIndex) {
             // for the purposes of the demo we do not handle actual
@@ -294,11 +296,14 @@ class _DemoPageState extends State<DemoPage>
             print('$oldIndex -> $newIndex');
           },
         ),
-        placeholderRowBuilder: _placeholderBuilder,
+        placeholderRowBuilder: (context, row, contentBuilder) =>
+            _placeholderBuilder(context, row, contentBuilder, columnsState),
         placeholderShade: placeholderShade,
-        headerBuilder: _headerBuilder,
+        headerBuilder: (context, contentBuilder) =>
+            _headerBuilder(context, contentBuilder, columnsState),
         headerHeight: _rowHeight,
-        footerBuilder: _footerBuilder,
+        footerBuilder: (context, contentBuilder) =>
+            _footerBuilder(context, contentBuilder, columnsState),
         footerHeight: _rowHeight,
         // RefreshIndicator can be used as a parent of [TableView] as well
         bodyContainerBuilder: (context, bodyContainer) =>
@@ -313,6 +318,7 @@ class _DemoPageState extends State<DemoPage>
   Widget _buildSliverExample(
     BuildContext context,
     TablePlaceholderShade? placeholderShade,
+    ValueNotifier<List<_DemoTableColumn>> columnsState,
   ) {
     /// the count is on the low side to make reaching table boundaries easier
     const rowsPerTable = 90;
@@ -356,7 +362,7 @@ class _DemoPageState extends State<DemoPage>
                     ),
                   ),
                 ),
-                columns: columns,
+                columns: columnsState.value,
                 rowCount: rowsPerTable,
                 rowHeight:
                     stylingController.doExpansion.value ? null : _rowHeight,
@@ -364,6 +370,7 @@ class _DemoPageState extends State<DemoPage>
                   context,
                   stylingController.doExpansion.value,
                   i * rowsPerTable,
+                  columnsState,
                 ),
                 rowReorder: TableRowReorder(
                   onReorder: (oldIndex, newIndex) {
@@ -372,12 +379,16 @@ class _DemoPageState extends State<DemoPage>
                     print('$oldIndex -> $newIndex');
                   },
                 ),
-                placeholderRowBuilder: _placeholderBuilder,
+                placeholderRowBuilder: (context, row, contentBuilder) =>
+                    _placeholderBuilder(
+                        context, row, contentBuilder, columnsState),
                 placeholderShade: placeholderShade,
                 headerHeight: _rowHeight,
-                headerBuilder: _headerBuilder,
+                headerBuilder: (context, contentBuilder) =>
+                    _headerBuilder(context, contentBuilder, columnsState),
                 footerHeight: _rowHeight,
-                footerBuilder: _footerBuilder,
+                footerBuilder: (context, contentBuilder) =>
+                    _footerBuilder(context, contentBuilder, columnsState),
               ),
               SliverFixedExtentList(
                 delegate: SliverChildBuilderDelegate(
@@ -408,25 +419,28 @@ class _DemoPageState extends State<DemoPage>
   Widget _headerBuilder(
     BuildContext context,
     TableRowContentBuilder contentBuilder,
+    ValueNotifier<List<_DemoTableColumn>> columnsState,
   ) =>
       contentBuilder(
         context,
         (context, column) {
-          switch (columns[column].index) {
+          switch (columnsState.value[column].index) {
             case 0:
               return Checkbox(
                   value: selection.isEmpty ? false : null,
                   tristate: true,
-                  onChanged: (value) => Navigator.of(context)
-                      .push(_createColumnControlsRoute(context, column)));
+                  onChanged: (value) => Navigator.of(context).push(
+                      _createColumnControlsRoute(
+                          context, column, columnsState)));
             case -1:
               return Center(
                 child: SizedBox(
                   width: _rowHeight,
                   height: _rowHeight,
                   child: IconButton(
-                    onPressed: () => Navigator.of(context)
-                        .push(_createColumnControlsRoute(context, column)),
+                    onPressed: () => Navigator.of(context).push(
+                        _createColumnControlsRoute(
+                            context, column, columnsState)),
                     icon: Icon(
                       color: Theme.of(context).colorScheme.onSurface,
                       Icons.more_vert,
@@ -438,8 +452,9 @@ class _DemoPageState extends State<DemoPage>
               return Material(
                 type: MaterialType.transparency,
                 child: InkWell(
-                  onTap: () => Navigator.of(context)
-                      .push(_createColumnControlsRoute(context, column)),
+                  onTap: () => Navigator.of(context).push(
+                      _createColumnControlsRoute(
+                          context, column, columnsState)),
                   child: Padding(
                     padding: stylingController.useRTL.value
                         ? const EdgeInsets.only(right: 8.0)
@@ -448,7 +463,7 @@ class _DemoPageState extends State<DemoPage>
                       alignment: stylingController.useRTL.value
                           ? Alignment.centerRight
                           : Alignment.centerLeft,
-                      child: Text('${columns[column].index}'),
+                      child: Text('${columnsState.value[column].index}'),
                     ),
                   ),
                 ),
@@ -460,22 +475,28 @@ class _DemoPageState extends State<DemoPage>
   ModalRoute<void> _createColumnControlsRoute(
     BuildContext cellBuildContext,
     int columnIndex,
+    ValueNotifier<List<_DemoTableColumn>> columnsState,
   ) {
-    final initialColumn = columns[columnIndex];
+    final initialColumn = columnsState.value[columnIndex];
     return TableColumnControlHandlesPopupRoute.realtime(
       controlCellBuildContext: cellBuildContext,
       columnIndex: columnIndex,
       tableViewChanged: null,
-      onColumnTranslate: (index, newTranslation) => setState(
-        () => columns[index] =
-            columns[index].copyWith(translation: newTranslation),
-      ),
-      onColumnResize: (index, newWidth) => setState(
-        () => columns[index] = columns[index].copyWith(width: newWidth),
-      ),
-      onColumnMove: (oldIndex, newIndex) => setState(
-        () => columns.insert(newIndex, columns.removeAt(oldIndex)),
-      ),
+      onColumnTranslate: (index, newTranslation) {
+        final columns = columnsState.value.toList();
+        columns[index] = columns[index].copyWith(translation: newTranslation);
+        columnsState.value = columns;
+      },
+      onColumnResize: (index, newWidth) {
+        final columns = columnsState.value.toList();
+        columns[index] = columns[index].copyWith(width: newWidth);
+        columnsState.value = columns;
+      },
+      onColumnMove: (oldIndex, newIndex) {
+        final columns = columnsState.value.toList();
+        columns.insert(newIndex, columns.removeAt(oldIndex));
+        columnsState.value = columns;
+      },
       leadingImmovableColumnCount: 0,
       trailingImmovableColumnCount: 0,
       popupBuilder: (context, animation, secondaryAnimation, columnWidth) =>
@@ -503,6 +524,7 @@ class _DemoPageState extends State<DemoPage>
                 onClickApply: (flex, freezePriority, sticky) => setState(
                   () {
                     // find current column index
+                    final columns = columnsState.value.toList();
                     final index = columns.indexWhere(
                         (element) => element.key == initialColumn.key);
 
@@ -512,6 +534,7 @@ class _DemoPageState extends State<DemoPage>
                       freezePriority: freezePriority,
                       sticky: sticky,
                     );
+                    columnsState.value = columns;
                   },
                 ),
               ),
@@ -558,9 +581,10 @@ class _DemoPageState extends State<DemoPage>
   /// Creates [TableRowBuilder] closure.
   TableRowBuilder createRowBuilder(
     BuildContext context,
-    bool doExpansion, [
-    int start = 0,
-  ]) {
+    bool doExpansion,
+    int start,
+    ValueNotifier<List<_DemoTableColumn>> columnsState,
+  ) {
     final theme = Theme.of(context);
     final rowTextStyle = Theme.of(context).textTheme.bodyMedium;
 
@@ -587,7 +611,7 @@ class _DemoPageState extends State<DemoPage>
           : rowTextStyle;
 
       var cellBuilder = (BuildContext context, int column) {
-        switch (columns[column].index) {
+        switch (columnsState.value[column].index) {
           case 0:
             return Checkbox(
                 value: selection.contains(row),
@@ -612,7 +636,7 @@ class _DemoPageState extends State<DemoPage>
               child: Align(
                 alignment: cellAlignment,
                 child: Text(
-                  '${(row + 2) * columns[column].index}',
+                  '${(row + 2) * columnsState.value[column].index}',
                   style: textStyle,
                   overflow: TextOverflow.fade,
                   maxLines: 1,
@@ -643,7 +667,7 @@ class _DemoPageState extends State<DemoPage>
             child: contentBuilder(
               context,
               (context, column) {
-                switch (columns[column].index) {
+                switch (columnsState.value[column].index) {
                   case 0:
                   case -1:
                     return SizedBox();
@@ -653,7 +677,7 @@ class _DemoPageState extends State<DemoPage>
                       child: Align(
                         alignment: cellAlignment,
                         child: Text(
-                          '${sqrt((row + 2) * columns[column].index)}',
+                          '${sqrt((row + 2) * columnsState.value[column].index)}',
                           style: textStyle,
                           overflow: TextOverflow.fade,
                           maxLines: 1,
@@ -697,6 +721,7 @@ class _DemoPageState extends State<DemoPage>
     BuildContext context,
     int row,
     TableRowContentBuilder contentBuilder,
+    ValueNotifier<List<_DemoTableColumn>> columnsState,
   ) =>
       _wrapRow(
         row,
@@ -705,7 +730,7 @@ class _DemoPageState extends State<DemoPage>
           child: contentBuilder(
             context,
             (context, column) {
-              switch (columns[column].index) {
+              switch (columnsState.value[column].index) {
                 case 0:
                   return Checkbox(
                     value: selection.contains(row),
@@ -738,11 +763,12 @@ class _DemoPageState extends State<DemoPage>
   Widget _footerBuilder(
     BuildContext context,
     TableRowContentBuilder contentBuilder,
+    ValueNotifier<List<_DemoTableColumn>> columnsState,
   ) =>
       contentBuilder(
         context,
         (context, column) {
-          final index = columns[column].index;
+          final index = columnsState.value[column].index;
           if (index == -1) {
             return const SizedBox();
           }
